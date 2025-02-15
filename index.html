@@ -387,8 +387,19 @@
        Game Loop for Playing State
        ====================== */
     function playingGameLoop() {
-      if (gameState !== "playing") return;
+      // If gameState is not "playing", then if it's "game_over", display the game over screen and stop.
+      if (gameState !== "playing") {
+        if (gameState === "game_over") {
+          drawGameOver();
+        }
+        return;
+      }
       updatePlaying();
+      // If gameState changed to "game_over" during update, draw game over screen.
+      if (gameState === "game_over") {
+        drawGameOver();
+        return;
+      }
       drawPlaying();
       gameLoopTimeout = setTimeout(playingGameLoop, speed);
     }
@@ -488,7 +499,7 @@
           draw();
         }
       } else if (gameState === "game_over") {
-        // On game over, a click anywhere returns to menu
+        // On game over, click anywhere to return to menu
         gameState = "menu";
         draw();
       }

@@ -438,8 +438,8 @@
       } else if (gameState === "skins") {
         for (let opt of uiRects.maskOptions) {
           if (pointInRect(pos, opt.rect)) {
-            if (coinCount >= 5000) {
-              coinCount -= 5000;
+            if (coinCount >= 10) {
+              coinCount -= 10;
               snakeSkin = opt.img;
             } else {
               console.log("Not enough coins for this skin!");

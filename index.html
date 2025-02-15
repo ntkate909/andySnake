@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Snake Game with Skins and Colors</title>
+  <title>Snake Game with Skins and Rainbow Colors</title>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
     canvas { display: block; margin: 0 auto; background: #000; }
@@ -15,14 +15,14 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    // Global constants
+    // Global Constants
     const WIDTH = canvas.width;
     const HEIGHT = canvas.height;
     const GRID_SIZE = 20;
     const ROWS = Math.floor((HEIGHT - 100) / GRID_SIZE);
     const COLS = Math.floor(WIDTH / GRID_SIZE);
 
-    // Game state variables
+    // Global Game State Variables (declared only once)
     let gameState = "menu";  // "menu", "store", "skins", "playing", "game_over"
     let coinCount = 0;
     let score = 0;
@@ -33,10 +33,15 @@
     let snakeSkin = null;  // if set, an Image used for drawing snake segments; otherwise use solid color
     let snakeColor = "#00ff00";  // default color
 
-    // Timing for playing state updates
+    // Global Game Objects
+    let snake = null;
+    let food = null;
+    let obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
+
+    // Timing
     let lastUpdateTime = 0;
 
-    // --- Load images ---
+    // --- Load Images ---
     function loadImage(src) {
       const img = new Image();
       img.src = src;
@@ -49,13 +54,13 @@
     const snakeMenuBg = loadImage("snake_menu_bg.png");
     const coinIcon = loadImage("coin_icon.png");
 
-    // Load skin images m1.png...m10.png into an array
+    // Load skin images (m1.png to m10.png)
     const maskImages = [];
     for (let i = 1; i <= 10; i++) {
       maskImages.push(loadImage("m" + i + ".png"));
     }
 
-    // Expanded & Reordered color options (rainbow order)
+    // Expanded & Reordered color options in rainbow order
     const colorOptions = [
       { name: "Red", value: "#ff0000" },
       { name: "Orange", value: "#ffa500" },
@@ -138,16 +143,6 @@
       }
     }
 
-    // Global game variables
-    let snake = null;
-    let food = null;
-    let score = 0;
-    let level = 1;
-    let speed = 10;
-    let appleCount = 0;
-    let bonusActive = false;
-    let obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
-
     // --- Helper Functions ---
     function resetGame() {
       snake = new Snake();
@@ -178,190 +173,19 @@
       }
     }
 
-    // --- Utility ---
+    // Utility: check if a point is inside a rectangle
     function pointInRect(point, rect) {
       return point.x >= rect.x && point.x <= rect.x + rect.width &&
              point.y >= rect.y && point.y <= rect.y + rect.height;
     }
 
-    // We'll store UI element rectangles for click detection
+    // UI rectangles for click detection
     let uiRects = {};
 
     // --- Drawing Functions ---
-    function drawMenu() {
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      // Draw menu background (snake_menu_bg)
-      ctx.drawImage(snakeMenuBg, 0, 0, WIDTH, HEIGHT);
-      // Title
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "72px sans-serif";
-      let titleText = "SNAKE GAME";
-      let titleWidth = ctx.measureText(titleText).width;
-      ctx.fillText(titleText, (WIDTH - titleWidth) / 2, HEIGHT / 2 - 100);
-      // Play button (center)
-      const buttonW = 140, buttonH = 60;
-      const playX = (WIDTH - buttonW) / 2;
-      const playY = HEIGHT / 2;
-      ctx.fillStyle = "green";
-      roundRect(ctx, playX, playY, buttonW, buttonH, 10, true, false);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "36px sans-serif";
-      let playText = "Play";
-      let playTextWidth = ctx.measureText(playText).width;
-      ctx.fillText(playText, playX + (buttonW - playTextWidth) / 2, playY + 40);
-      uiRects.playButton = { x: playX, y: playY, width: buttonW, height: buttonH };
-      // Store icon next to play button
-      const storeX = playX + buttonW + 10;
-      const storeY = playY + (buttonH - 40) / 2;
-      ctx.drawImage(storeIcon, storeX, storeY, 40, 40);
-      uiRects.storeIcon = { x: storeX, y: storeY, width: 40, height: 40 };
-      // Coin icon in upper right
-      const margin = 10;
-      const coinX = WIDTH - 40 - margin;
-      const coinY = margin;
-      ctx.drawImage(coinIcon, coinX, coinY, 40, 40);
-      uiRects.coinIcon = { x: coinX, y: coinY, width: 40, height: 40 };
-      // Draw coin count to left of coin icon
-      ctx.font = "36px sans-serif";
-      ctx.fillStyle = GOLD;
-      let coinText = String(coinCount);
-      let coinTextWidth = ctx.measureText(coinText).width;
-      ctx.fillText(coinText, coinX - coinTextWidth - 5, coinY + 30);
-    }
-
-    function drawStore() {
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      // Draw store background (storeBg)
-      ctx.drawImage(storeBg, 0, 0, WIDTH, HEIGHT);
-      // Title
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "72px sans-serif";
-      let storeTitle = "Store";
-      let storeTitleWidth = ctx.measureText(storeTitle).width;
-      ctx.fillText(storeTitle, (WIDTH - storeTitleWidth) / 2, 50);
-      // Draw expanded color grid using 8 columns
-      const squareSize = 30;
-      const spacing = 5;
-      const cols = 8;
-      const totalWidth = cols * squareSize + (cols - 1) * spacing;
-      const startX = (WIDTH - totalWidth) / 2;
-      const startY = 100;
-      uiRects.colorOptions = [];
-      ctx.font = "12px sans-serif";
-      for (let i = 0; i < colorOptions.length; i++) {
-        let col = i % cols;
-        let row = Math.floor(i / cols);
-        let x = startX + col * (squareSize + spacing);
-        let y = startY + row * (squareSize + spacing);
-        ctx.fillStyle = colorOptions[i].value;
-        ctx.fillRect(x, y, squareSize, squareSize);
-        ctx.strokeStyle = BLACK;
-        ctx.strokeRect(x, y, squareSize, squareSize);
-        uiRects.colorOptions.push({ rect: { x, y, width: squareSize, height: squareSize },
-                                    value: colorOptions[i].value });
-      }
-      // Back button
-      const buttonW = 140, buttonH = 60;
-      const backX = (WIDTH - buttonW) / 2;
-      const backY = HEIGHT - 120;
-      ctx.fillStyle = "red";
-      roundRect(ctx, backX, backY, buttonW, buttonH, 10, true, false);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "36px sans-serif";
-      let backText = "Back";
-      let backTextWidth = ctx.measureText(backText).width;
-      ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
-      uiRects.storeBack = { x: backX, y: backY, width: buttonW, height: buttonH };
-      // Skins button (placed above back button)
-      const skinsY = backY - buttonH - 10;
-      ctx.fillStyle = "rgb(0,100,200)";
-      roundRect(ctx, backX, skinsY, buttonW, buttonH, 10, true, false);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "36px sans-serif";
-      let skinsText = "Skins";
-      let skinsTextWidth = ctx.measureText(skinsText).width;
-      ctx.fillText(skinsText, backX + (buttonW - skinsTextWidth) / 2, skinsY + 40);
-      uiRects.skinsButton = { x: backX, y: skinsY, width: buttonW, height: buttonH };
-    }
-
-    function drawSkins() {
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      ctx.drawImage(storeBg, 0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "72px sans-serif";
-      let skinsTitle = "Skins";
-      let titleWidth = ctx.measureText(skinsTitle).width;
-      ctx.fillText(skinsTitle, (WIDTH - titleWidth) / 2, 50);
-      // Layout mask previews in a grid; we use 2 columns.
-      const previewSize = 60;
-      const spacing = 20;
-      const cols = 2;
-      const totalWidth = cols * previewSize + (cols - 1) * spacing;
-      const startX = (WIDTH - totalWidth) / 2;
-      const startY = 120;
-      uiRects.maskOptions = [];
-      for (let i = 0; i < maskImages.length; i++) {
-        let col = i % cols;
-        let row = Math.floor(i / cols);
-        let x = startX + col * (previewSize + spacing);
-        let y = startY + row * (previewSize + spacing);
-        let rect = { x, y, width: previewSize, height: previewSize };
-        ctx.strokeStyle = BLACK;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, previewSize, previewSize);
-        // Scale mask image for preview (slightly smaller than preview square)
-        let preview = maskImages[i];
-        // For preview, scale to (previewSize - 10)
-        ctx.drawImage(preview, x + 5, y + 5, previewSize - 10, previewSize - 10);
-        // Overlay cost text in bottom right corner of preview
-        ctx.fillStyle = GOLD;
-        ctx.font = "14px sans-serif";
-        let costText = "5000";
-        let costWidth = ctx.measureText(costText).width;
-        ctx.fillText(costText, x + previewSize - costWidth - 2, y + previewSize - 2);
-        uiRects.maskOptions.push({ rect, img: maskImages[i] });
-      }
-      // Back button
-      const buttonW = 140, buttonH = 60;
-      const backX = (WIDTH - buttonW) / 2;
-      const backY = HEIGHT - 120;
-      ctx.fillStyle = "red";
-      roundRect(ctx, backX, backY, buttonW, buttonH, 10, true, false);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "36px sans-serif";
-      let backText = "Back";
-      let backTextWidth = ctx.measureText(backText).width;
-      ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
-      uiRects.skinsBack = { x: backX, y: backY, width: buttonW, height: buttonH };
-    }
-
-    function drawGameOver() {
-      ctx.clearRect(0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = "black";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.fillStyle = RED;
-      ctx.font = "72px sans-serif";
-      let goText = "Game Over!";
-      let goWidth = ctx.measureText(goText).width;
-      ctx.fillText(goText, (WIDTH - goWidth) / 2, HEIGHT / 2 - 50);
-      ctx.fillStyle = "#ffffff";
-      ctx.font = "36px sans-serif";
-      let scoreText = "Final Score: " + score;
-      let scoreWidth = ctx.measureText(scoreText).width;
-      ctx.fillText(scoreText, (WIDTH - scoreWidth) / 2, HEIGHT / 2);
-      let contText = "Click to return to menu";
-      let contWidth = ctx.measureText(contText).width;
-      ctx.fillText(contText, (WIDTH - contWidth) / 2, HEIGHT / 2 + 50);
-    }
-
-    // Utility function to draw rounded rectangles
     function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-      if (typeof stroke === 'undefined') {
-        stroke = true;
-      }
-      if (typeof radius === 'undefined') {
-        radius = 5;
-      }
+      if (typeof stroke === 'undefined') { stroke = true; }
+      if (typeof radius === 'undefined') { radius = 5; }
       ctx.beginPath();
       ctx.moveTo(x + radius, y);
       ctx.lineTo(x + width - radius, y);
@@ -373,69 +197,196 @@
       ctx.lineTo(x, y + radius);
       ctx.quadraticCurveTo(x, y, x + radius, y);
       ctx.closePath();
-      if (fill) {
-        ctx.fill();
+      if (fill) { ctx.fill(); }
+      if (stroke) { ctx.stroke(); }
+    }
+
+    function drawMenu() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.drawImage(snakeMenuBg, 0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "72px sans-serif";
+      const titleText = "SNAKE GAME";
+      const titleWidth = ctx.measureText(titleText).width;
+      ctx.fillText(titleText, (WIDTH - titleWidth) / 2, HEIGHT / 2 - 100);
+      const buttonW = 140, buttonH = 60;
+      const playX = (WIDTH - buttonW) / 2;
+      const playY = HEIGHT / 2;
+      ctx.fillStyle = "green";
+      roundRect(ctx, playX, playY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      const playText = "Play";
+      const playTextWidth = ctx.measureText(playText).width;
+      ctx.fillText(playText, playX + (buttonW - playTextWidth) / 2, playY + 40);
+      uiRects.playButton = { x: playX, y: playY, width: buttonW, height: buttonH };
+      const storeX = playX + buttonW + 10;
+      const storeY = playY + (buttonH - 40) / 2;
+      ctx.drawImage(storeIcon, storeX, storeY, 40, 40);
+      uiRects.storeIcon = { x: storeX, y: storeY, width: 40, height: 40 };
+      const margin = 10;
+      const coinX = WIDTH - 40 - margin;
+      const coinY = margin;
+      ctx.drawImage(coinIcon, coinX, coinY, 40, 40);
+      uiRects.coinIcon = { x: coinX, y: coinY, width: 40, height: 40 };
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = GOLD;
+      const coinText = String(coinCount);
+      const coinTextWidth = ctx.measureText(coinText).width;
+      ctx.fillText(coinText, coinX - coinTextWidth - 5, coinY + 30);
+      requestAnimationFrame(drawMenu);
+      return uiRects;
+    }
+
+    function drawStore() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.drawImage(storeBg, 0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "72px sans-serif";
+      const storeTitle = "Store";
+      const storeTitleWidth = ctx.measureText(storeTitle).width;
+      ctx.fillText(storeTitle, (WIDTH - storeTitleWidth) / 2, 50);
+      // Color grid (8 columns)
+      const squareSize = 30, spacing = 5, cols = 8;
+      const totalWidth = cols * squareSize + (cols - 1) * spacing;
+      const startX = (WIDTH - totalWidth) / 2;
+      const startY = 100;
+      uiRects.colorOptions = [];
+      for (let i = 0; i < colorOptions.length; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = startX + col * (squareSize + spacing);
+        const y = startY + row * (squareSize + spacing);
+        ctx.fillStyle = colorOptions[i].value;
+        ctx.fillRect(x, y, squareSize, squareSize);
+        ctx.strokeStyle = BLACK;
+        ctx.strokeRect(x, y, squareSize, squareSize);
+        uiRects.colorOptions.push({ rect: { x, y, width: squareSize, height: squareSize },
+                                      value: colorOptions[i].value });
       }
-      if (stroke) {
-        ctx.stroke();
+      // Back button
+      const buttonW = 140, buttonH = 60;
+      const backX = (WIDTH - buttonW) / 2;
+      const backY = HEIGHT - 120;
+      ctx.fillStyle = "red";
+      roundRect(ctx, backX, backY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      const backText = "Back";
+      const backTextWidth = ctx.measureText(backText).width;
+      ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
+      uiRects.storeBack = { x: backX, y: backY, width: buttonW, height: buttonH };
+      // Skins button
+      const skinsY = backY - buttonH - 10;
+      ctx.fillStyle = "rgb(0,100,200)";
+      roundRect(ctx, backX, skinsY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      const skinsText = "Skins";
+      const skinsTextWidth = ctx.measureText(skinsText).width;
+      ctx.fillText(skinsText, backX + (buttonW - skinsTextWidth) / 2, skinsY + 40);
+      uiRects.skinsButton = { x: backX, y: skinsY, width: buttonW, height: buttonH };
+      requestAnimationFrame(drawStore);
+      return uiRects;
+    }
+
+    function drawSkins() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.drawImage(storeBg, 0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "72px sans-serif";
+      const skinsTitle = "Skins";
+      const titleWidth = ctx.measureText(skinsTitle).width;
+      ctx.fillText(skinsTitle, (WIDTH - titleWidth) / 2, 50);
+      const previewSize = 60, spacing = 20, cols = 2;
+      const totalWidth = cols * previewSize + (cols - 1) * spacing;
+      const startX = (WIDTH - totalWidth) / 2;
+      const startY = 120;
+      uiRects.maskOptions = [];
+      for (let i = 0; i < maskImages.length; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = startX + col * (previewSize + spacing);
+        const y = startY + row * (previewSize + spacing);
+        const rect = { x, y, width: previewSize, height: previewSize };
+        ctx.strokeStyle = BLACK;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, previewSize, previewSize);
+        const preview = maskImages[i];
+        const scaledPreview = document.createElement("canvas");
+        scaledPreview.width = previewSize - 10;
+        scaledPreview.height = previewSize - 10;
+        const previewCtx = scaledPreview.getContext("2d");
+        previewCtx.drawImage(preview, 0, 0, scaledPreview.width, scaledPreview.height);
+        const previewX = x + (previewSize - scaledPreview.width) / 2;
+        const previewY = y + (previewSize - scaledPreview.height) / 2;
+        ctx.drawImage(scaledPreview, previewX, previewY);
+        // Overlay cost text
+        ctx.fillStyle = GOLD;
+        ctx.font = "14px sans-serif";
+        const costText = "5000";
+        const costWidth = ctx.measureText(costText).width;
+        ctx.fillText(costText, x + previewSize - costWidth - 2, y + previewSize - 2);
+        uiRects.maskOptions.push({ rect, img: maskImages[i] });
       }
+      // Back button
+      const buttonW = 140, buttonH = 60;
+      const backX = (WIDTH - buttonW) / 2;
+      const backY = HEIGHT - 120;
+      ctx.fillStyle = "red";
+      roundRect(ctx, backX, backY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      const backText = "Back";
+      const backTextWidth = ctx.measureText(backText).width;
+      ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
+      uiRects.skinsBack = { x: backX, y: backY, width: buttonW, height: buttonH };
+      requestAnimationFrame(drawSkins);
+      return uiRects;
     }
 
-    // --- Game Objects for Playing State ---
-    function initGame() {
-      resetGame();
+    function drawGameOver() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = RED;
+      ctx.font = "72px sans-serif";
+      const goText = "Game Over!";
+      const goWidth = ctx.measureText(goText).width;
+      ctx.fillText(goText, (WIDTH - goWidth) / 2, HEIGHT / 2 - 50);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      const scoreText = "Final Score: " + score;
+      const scoreWidth = ctx.measureText(scoreText).width;
+      ctx.fillText(scoreText, (WIDTH - scoreWidth) / 2, HEIGHT / 2);
+      const contText = "Click to return to menu";
+      const contWidth = ctx.measureText(contText).width;
+      ctx.fillText(contText, (WIDTH - contWidth) / 2, HEIGHT / 2 + 50);
     }
 
-    // --- Main Loop ---
-    function mainLoop(timestamp) {
-      // Use timestamp to control update rate in "playing" state
-      if (gameState === "playing") {
-        if (!lastUpdateTime) lastUpdateTime = timestamp;
-        const delta = timestamp - lastUpdateTime;
-        if (delta > 1000 / speed) {
-          updatePlaying();
-          lastUpdateTime = timestamp;
-        }
-      }
-      requestAnimationFrame(mainLoop);
-    }
-
-    // --- Update playing state ---
-    function updatePlaying() {
-      // Update snake movement is already done via event handling and snake.move() in playing block.
-      // We'll simply redraw the playing state.
-      // (The playing state logic is handled in the event loop below.)
-      drawPlaying();
-    }
-
+    // --- Playing State Drawing ---
     function drawPlaying() {
-      // Clear the top scoreboard area
       ctx.fillStyle = SCOREBOARD_BG;
       ctx.fillRect(0, 0, WIDTH, 100);
       ctx.drawImage(grassBg, 0, 100, WIDTH, HEIGHT - 100);
-      // Draw snake
       snake.body.forEach(seg => {
-        let x = seg.x * GRID_SIZE;
-        let y = 100 + seg.y * GRID_SIZE;
+        const x = seg.x * GRID_SIZE;
+        const y = 100 + seg.y * GRID_SIZE;
         if (snakeSkin) {
-          // Scale skin to grid size
           ctx.drawImage(snakeSkin, x, y, GRID_SIZE, GRID_SIZE);
         } else {
           ctx.fillStyle = snakeColor;
           ctx.fillRect(x, y, GRID_SIZE, GRID_SIZE);
         }
       });
-      // Draw food
       if (food.position) {
         ctx.fillStyle = RED;
         ctx.fillRect(food.position.x * GRID_SIZE, 100 + food.position.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
       }
-      // Draw obstacles
       obstacles.forEach(obs => {
         ctx.fillStyle = GRAY;
         ctx.fillRect(obs.x * GRID_SIZE, 100 + obs.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
       });
-      // Draw scoreboard info
       ctx.fillStyle = BLACK;
       ctx.font = "36px sans-serif";
       ctx.fillText("Score: " + score + "  Level: " + level, 10, 40);
@@ -466,10 +417,9 @@
         } else if (pointInRect(pos, uiRects.storeIcon)) {
           gameState = "store";
         } else if (pointInRect(pos, uiRects.coinIcon)) {
-          console.log("Coin icon clicked! (Add your own logic here)");
+          console.log("Coin icon clicked! (Add your own logic)");
         }
       } else if (gameState === "store") {
-        // Check color grid
         for (let opt of uiRects.colorOptions) {
           if (pointInRect(pos, opt.rect)) {
             snakeColor = opt.value;
@@ -495,7 +445,6 @@
           gameState = "store";
         }
       } else if (gameState === "playing") {
-        // In playing state, mouse click changes snake direction
         const head = snake.body[0];
         const gridX = Math.floor(pos.x / GRID_SIZE);
         const gridY = Math.floor((pos.y - 100) / GRID_SIZE);
@@ -517,17 +466,15 @@
       }
     }
 
-    // --- Game Loop for Playing State Logic ---
+    // --- Update Playing State ---
     function updateGameLogic() {
       if (gameState === "playing") {
         snake.move();
-        // Check self-collision
         const head = snake.body[0];
         if (snake.body.slice(1).some(seg => seg.x === head.x && seg.y === head.y)) {
           gameState = "game_over";
           return;
         }
-        // Check obstacle collision
         if (obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
           if (snake.body.length > 1) {
             snake.body.pop();
@@ -536,7 +483,6 @@
             return;
           }
         }
-        // Check food collision
         if (food.position && head.x === food.position.x && head.y === food.position.y) {
           snake.grow();
           appleCount++;
@@ -556,7 +502,6 @@
       }
     }
 
-    // --- Main Loop ---
     function gameLoop(timestamp) {
       if (gameState === "playing") {
         if (!lastUpdateTime) lastUpdateTime = timestamp;
@@ -580,7 +525,6 @@
 
     // Start the game loop
     requestAnimationFrame(gameLoop);
-
   </script>
 </body>
 </html>

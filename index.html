@@ -1,18 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Snake Game with Store & Color Selector</title>
+  <title>Snake Game with Skins and Colors</title>
   <style>
-    body {
-      margin: 0;
-      background: #222;
-    }
-    canvas {
-      display: block;
-      margin: 0 auto;
-      box-shadow: 0 0 10px #000;
-    }
+    body { margin: 0; overflow: hidden; background: #000; }
+    canvas { display: block; margin: 0 auto; background: #000; }
   </style>
 </head>
 <body>
@@ -22,132 +15,81 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    /* ======================
-       Global Constants & Variables
-       ====================== */
-    const WIDTH = 600;
-    const HEIGHT = 700;
+    // Global constants
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
     const GRID_SIZE = 20;
     const ROWS = Math.floor((HEIGHT - 100) / GRID_SIZE);
     const COLS = Math.floor(WIDTH / GRID_SIZE);
 
-    // Colors
-    const RED = "#ff0000";
-    const BLACK = "#000000";
-    const GRAY = "#969696";
-    const GOLD = "#ffd700";
-    const SCOREBOARD_BG = "#e6e6e6";
-
-    // Global snake color (default green)
-    let snake_color = "#00ff00";
-
-    // Game state: "menu", "store", "playing", "game_over"
-    let gameState = "menu";
-    let gameLoopTimeout;
-
-    // Game variables (reset in resetGame)
-    let snake = null;
-    let food = null;
+    // Game state variables
+    let gameState = "menu";  // "menu", "store", "skins", "playing", "game_over"
+    let coinCount = 0;
     let score = 0;
     let level = 1;
-    let speed = 150; // in ms
+    let speed = 10; // frames per second
     let appleCount = 0;
     let bonusActive = false;
-    let obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
+    let snakeSkin = null;  // if set, an Image used for drawing snake segments; otherwise use solid color
+    let snakeColor = "#00ff00";  // default color
 
-    // Clickable rectangles for menu and store
-    let menuPlayButtonRect, menuStoreIconRect;
-    let storeBackButtonRect, storeOptionRects;
+    // Timing for playing state updates
+    let lastUpdateTime = 0;
 
-    // Full list of color options (from the original Python code)
+    // --- Load images ---
+    function loadImage(src) {
+      const img = new Image();
+      img.src = src;
+      return img;
+    }
+
+    const grassBg = loadImage("grass_bg.png");
+    const storeIcon = loadImage("store_icon.png");
+    const storeBg = loadImage("cat_bg.png");
+    const snakeMenuBg = loadImage("snake_menu_bg.png");
+    const coinIcon = loadImage("coin_icon.png");
+
+    // Load skin images m1.png...m10.png into an array
+    const maskImages = [];
+    for (let i = 1; i <= 10; i++) {
+      maskImages.push(loadImage("m" + i + ".png"));
+    }
+
+    // Expanded & Reordered color options (rainbow order)
     const colorOptions = [
-      { name: "Red", color: "#ff0000" },
-      { name: "Blue", color: "#0000ff" },
-      { name: "Green", color: "#00ff00" },
-      { name: "Orange", color: "#ffa500" },
-      { name: "White", color: "#ffffff" },
-      { name: "Black", color: "#000000" },
-      { name: "Yellow", color: "#ffff00" },
-      { name: "Purple", color: "#800080" },
-      { name: "Silver", color: "#c0c0c0" },
-      { name: "Brown", color: "#a52a2a" },
-      { name: "Gray", color: "#808080" },
-      { name: "Pink", color: "#ffc0cb" },
-      { name: "Olive", color: "#808000" },
-      { name: "Maroon", color: "#800000" },
-      { name: "Violet", color: "#ee82ee" },
-      { name: "Charcoal", color: "#36454f" },
-      { name: "Magenta", color: "#ff00ff" },
-      { name: "Bronze", color: "#cd7f32" },
-      { name: "Cream", color: "#fffdd0" },
-      { name: "Gold", color: "#ffd700" },
-      { name: "Tan", color: "#d2b48c" },
-      { name: "Teal", color: "#008080" },
-      { name: "Mustard", color: "#ffdb58" },
-      { name: "Navy Blue", color: "#000080" },
-      { name: "Coral", color: "#ff7f50" },
-      { name: "Burgundy", color: "#800020" },
-      { name: "Lavender", color: "#e6e6fa" },
-      { name: "Mauve", color: "#e0b0ff" },
-      { name: "Cyan", color: "#e0f7fa" },
-      { name: "Peach", color: "#ffe5b4" },
-      { name: "Rust", color: "#b7410e" },
-      { name: "Indigo", color: "#4b0082" },
-      { name: "Ruby", color: "#e0115f" },
-      { name: "Lime Green", color: "#32cd32" },
-      { name: "Salmon", color: "#fa8072" },
-      { name: "Azure", color: "#007fff" },
-      { name: "Beige", color: "#f5f5dc" },
-      { name: "Copper Rose", color: "#996666" },
-      { name: "Turquoise", color: "#40e0d0" },
-      { name: "Aqua", color: "#00ffff" },
-      { name: "Mint", color: "#3eb489" },
-      { name: "Sky Blue", color: "#87ceeb" },
-      { name: "Crimson", color: "#dc143c" },
-      { name: "Saffron", color: "#f4c430" },
-      { name: "Lemon Yellow", color: "#fff44f" },
-      { name: "Grapevine", color: "#43254f" },
-      { name: "Fuschia", color: "#ff00ff" },
-      { name: "Amber", color: "#ffbf00" },
-      { name: "Sea Green", color: "#2e8b57" },
-      { name: "Dark Green", color: "#006400" },
-      { name: "Pearl", color: "#eae0c8" },
-      { name: "Ivory", color: "#fffff0" },
-      { name: "Tangerine", color: "#f28500" },
-      { name: "Garnet", color: "#733635" },
-      { name: "Cherry Red", color: "#de3163" },
-      { name: "Emerald", color: "#50c878" },
-      { name: "Brunette", color: "#664238" },
-      { name: "Sapphire", color: "#0f52ba" },
-      { name: "Lilac", color: "#c8a2c8" },
-      { name: "Rosewood", color: "#65000b" },
-      { name: "Arctic Blue", color: "#0000ff" },
-      { name: "Ash", color: "#808080" },
-      { name: "Mocha", color: "#C0A392" },
-      { name: "Coffee Brown", color: "#6f4e37" },
-      { name: "Jet Black", color: "#0a0a0a" },
-      { name: "Pista Green", color: "#00ff00" }
+      { name: "Red", value: "#ff0000" },
+      { name: "Orange", value: "#ffa500" },
+      { name: "Yellow", value: "#ffff00" },
+      { name: "Lemon Yellow", value: "#fff44f" },
+      { name: "Green", value: "#00ff00" },
+      { name: "Emerald", value: "#50c878" },
+      { name: "Teal", value: "#008080" },
+      { name: "Cyan", value: "#00ffff" },
+      { name: "Sky Blue", value: "#87ceeb" },
+      { name: "Azure", value: "#007fff" },
+      { name: "Blue", value: "#0000ff" },
+      { name: "Indigo", value: "#4b0082" },
+      { name: "Violet", value: "#ee82ee" },
+      { name: "Purple", value: "#800080" },
+      { name: "Magenta", value: "#ff00ff" },
+      { name: "Pink", value: "#ffc0cb" },
+      { name: "Silver", value: "#c0c0c0" },
+      { name: "Brown", value: "#a52a2a" },
+      { name: "Gray", value: "#808080" },
+      { name: "Olive", value: "#808000" },
+      { name: "Maroon", value: "#800000" },
+      { name: "Charcoal", value: "#36454f" },
+      { name: "Bronze", value: "#cd7f32" },
+      { name: "Cream", value: "#fffdd0" },
+      { name: "Gold", value: "#ffd700" },
+      { name: "Tan", value: "#d2b48c" },
+      { name: "Mustard", value: "#ffdb58" },
+      { name: "Navy Blue", value: "#000080" },
+      { name: "Coral", value: "#ff7f50" },
+      { name: "Burgundy", value: "#800020" }
     ];
 
-    // Load external images
-    const grass_bg = new Image();
-    grass_bg.src = "grass_bg.png";
-    const store_icon = new Image();
-    store_icon.src = "store_icon.png";
-    const store_bg = new Image();
-    store_bg.src = "cat_bg.png";
-    const snake_menu_bg = new Image();
-    snake_menu_bg.src = "snake_menu_bg.png";
-
-    // Direction constants
-    const UP = { x: 0, y: -1 };
-    const DOWN = { x: 0, y: 1 };
-    const LEFT = { x: -1, y: 0 };
-    const RIGHT = { x: 1, y: 0 };
-
-    /* ======================
-       Class Definitions
-       ====================== */
+    // --- Game Classes ---
     class Snake {
       constructor() {
         this.body = [{ x: 5, y: 5 }];
@@ -155,12 +97,12 @@
         this.growing = false;
       }
       move() {
-        let head = this.body[0];
-        let new_head = {
-          x: (head.x + this.direction.x + COLS) % COLS,
-          y: (head.y + this.direction.y + ROWS) % ROWS
+        const head = this.body[0];
+        const newHead = {
+          x: (head.x + this.direction[0] + COLS) % COLS,
+          y: (head.y + this.direction[1] + ROWS) % ROWS
         };
-        this.body.unshift(new_head);
+        this.body.unshift(newHead);
         if (this.growing) {
           this.growing = false;
         } else {
@@ -177,33 +119,42 @@
         this.position = this.generateNewPosition();
       }
       generateNewPosition() {
-        let available = [];
+        const available = [];
         for (let x = 0; x < COLS; x++) {
           for (let y = 0; y < ROWS; y++) {
-            if (
-              !snake.body.some(seg => seg.x === x && seg.y === y) &&
-              !obstacles.some(obs => obs.x === x && obs.y === y)
-            ) {
+            if (!snake.body.some(seg => seg.x === x && seg.y === y) &&
+                !obstacles.some(obs => obs.x === x && obs.y === y)) {
               available.push({ x, y });
             }
           }
         }
-        return available.length ? available[Math.floor(Math.random() * available.length)] : null;
+        if (available.length > 0) {
+          return available[Math.floor(Math.random() * available.length)];
+        }
+        return null;
       }
       respawn() {
         this.position = this.generateNewPosition();
       }
     }
 
-    /* ======================
-       Helper Functions
-       ====================== */
+    // Global game variables
+    let snake = null;
+    let food = null;
+    let score = 0;
+    let level = 1;
+    let speed = 10;
+    let appleCount = 0;
+    let bonusActive = false;
+    let obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
+
+    // --- Helper Functions ---
     function resetGame() {
       snake = new Snake();
       food = new Food();
       score = 0;
       level = 1;
-      speed = 150;
+      speed = 10;
       appleCount = 0;
       bonusActive = false;
       obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
@@ -211,28 +162,206 @@
 
     function addObstacle() {
       if (obstacles.length < 10) {
-        let available = [];
+        const available = [];
         for (let x = 0; x < COLS; x++) {
           for (let y = 0; y < ROWS; y++) {
-            if (
-              !snake.body.some(seg => seg.x === x && seg.y === y) &&
-              !obstacles.some(obs => obs.x === x && obs.y === y) &&
-              (food.position.x !== x || food.position.y !== y)
-            ) {
+            if (!snake.body.some(seg => seg.x === x && seg.y === y) &&
+                !obstacles.some(obs => obs.x === x && obs.y === y) &&
+                !(food.position && food.position.x === x && food.position.y === y)) {
               available.push({ x, y });
             }
           }
         }
-        if (available.length) {
-          let new_obs = available[Math.floor(Math.random() * available.length)];
-          obstacles.push(new_obs);
+        if (available.length > 0) {
+          obstacles.push(available[Math.floor(Math.random() * available.length)]);
         }
       }
     }
 
-    // Draw a rounded rectangle
+    // --- Utility ---
+    function pointInRect(point, rect) {
+      return point.x >= rect.x && point.x <= rect.x + rect.width &&
+             point.y >= rect.y && point.y <= rect.y + rect.height;
+    }
+
+    // We'll store UI element rectangles for click detection
+    let uiRects = {};
+
+    // --- Drawing Functions ---
+    function drawMenu() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      // Draw menu background (snake_menu_bg)
+      ctx.drawImage(snakeMenuBg, 0, 0, WIDTH, HEIGHT);
+      // Title
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "72px sans-serif";
+      let titleText = "SNAKE GAME";
+      let titleWidth = ctx.measureText(titleText).width;
+      ctx.fillText(titleText, (WIDTH - titleWidth) / 2, HEIGHT / 2 - 100);
+      // Play button (center)
+      const buttonW = 140, buttonH = 60;
+      const playX = (WIDTH - buttonW) / 2;
+      const playY = HEIGHT / 2;
+      ctx.fillStyle = "green";
+      roundRect(ctx, playX, playY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      let playText = "Play";
+      let playTextWidth = ctx.measureText(playText).width;
+      ctx.fillText(playText, playX + (buttonW - playTextWidth) / 2, playY + 40);
+      uiRects.playButton = { x: playX, y: playY, width: buttonW, height: buttonH };
+      // Store icon next to play button
+      const storeX = playX + buttonW + 10;
+      const storeY = playY + (buttonH - 40) / 2;
+      ctx.drawImage(storeIcon, storeX, storeY, 40, 40);
+      uiRects.storeIcon = { x: storeX, y: storeY, width: 40, height: 40 };
+      // Coin icon in upper right
+      const margin = 10;
+      const coinX = WIDTH - 40 - margin;
+      const coinY = margin;
+      ctx.drawImage(coinIcon, coinX, coinY, 40, 40);
+      uiRects.coinIcon = { x: coinX, y: coinY, width: 40, height: 40 };
+      // Draw coin count to left of coin icon
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = GOLD;
+      let coinText = String(coinCount);
+      let coinTextWidth = ctx.measureText(coinText).width;
+      ctx.fillText(coinText, coinX - coinTextWidth - 5, coinY + 30);
+    }
+
+    function drawStore() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      // Draw store background (storeBg)
+      ctx.drawImage(storeBg, 0, 0, WIDTH, HEIGHT);
+      // Title
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "72px sans-serif";
+      let storeTitle = "Store";
+      let storeTitleWidth = ctx.measureText(storeTitle).width;
+      ctx.fillText(storeTitle, (WIDTH - storeTitleWidth) / 2, 50);
+      // Draw expanded color grid using 8 columns
+      const squareSize = 30;
+      const spacing = 5;
+      const cols = 8;
+      const totalWidth = cols * squareSize + (cols - 1) * spacing;
+      const startX = (WIDTH - totalWidth) / 2;
+      const startY = 100;
+      uiRects.colorOptions = [];
+      ctx.font = "12px sans-serif";
+      for (let i = 0; i < colorOptions.length; i++) {
+        let col = i % cols;
+        let row = Math.floor(i / cols);
+        let x = startX + col * (squareSize + spacing);
+        let y = startY + row * (squareSize + spacing);
+        ctx.fillStyle = colorOptions[i].value;
+        ctx.fillRect(x, y, squareSize, squareSize);
+        ctx.strokeStyle = BLACK;
+        ctx.strokeRect(x, y, squareSize, squareSize);
+        uiRects.colorOptions.push({ rect: { x, y, width: squareSize, height: squareSize },
+                                    value: colorOptions[i].value });
+      }
+      // Back button
+      const buttonW = 140, buttonH = 60;
+      const backX = (WIDTH - buttonW) / 2;
+      const backY = HEIGHT - 120;
+      ctx.fillStyle = "red";
+      roundRect(ctx, backX, backY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      let backText = "Back";
+      let backTextWidth = ctx.measureText(backText).width;
+      ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
+      uiRects.storeBack = { x: backX, y: backY, width: buttonW, height: buttonH };
+      // Skins button (placed above back button)
+      const skinsY = backY - buttonH - 10;
+      ctx.fillStyle = "rgb(0,100,200)";
+      roundRect(ctx, backX, skinsY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      let skinsText = "Skins";
+      let skinsTextWidth = ctx.measureText(skinsText).width;
+      ctx.fillText(skinsText, backX + (buttonW - skinsTextWidth) / 2, skinsY + 40);
+      uiRects.skinsButton = { x: backX, y: skinsY, width: buttonW, height: buttonH };
+    }
+
+    function drawSkins() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.drawImage(storeBg, 0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "72px sans-serif";
+      let skinsTitle = "Skins";
+      let titleWidth = ctx.measureText(skinsTitle).width;
+      ctx.fillText(skinsTitle, (WIDTH - titleWidth) / 2, 50);
+      // Layout mask previews in a grid; we use 2 columns.
+      const previewSize = 60;
+      const spacing = 20;
+      const cols = 2;
+      const totalWidth = cols * previewSize + (cols - 1) * spacing;
+      const startX = (WIDTH - totalWidth) / 2;
+      const startY = 120;
+      uiRects.maskOptions = [];
+      for (let i = 0; i < maskImages.length; i++) {
+        let col = i % cols;
+        let row = Math.floor(i / cols);
+        let x = startX + col * (previewSize + spacing);
+        let y = startY + row * (previewSize + spacing);
+        let rect = { x, y, width: previewSize, height: previewSize };
+        ctx.strokeStyle = BLACK;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x, y, previewSize, previewSize);
+        // Scale mask image for preview (slightly smaller than preview square)
+        let preview = maskImages[i];
+        // For preview, scale to (previewSize - 10)
+        ctx.drawImage(preview, x + 5, y + 5, previewSize - 10, previewSize - 10);
+        // Overlay cost text in bottom right corner of preview
+        ctx.fillStyle = GOLD;
+        ctx.font = "14px sans-serif";
+        let costText = "5000";
+        let costWidth = ctx.measureText(costText).width;
+        ctx.fillText(costText, x + previewSize - costWidth - 2, y + previewSize - 2);
+        uiRects.maskOptions.push({ rect, img: maskImages[i] });
+      }
+      // Back button
+      const buttonW = 140, buttonH = 60;
+      const backX = (WIDTH - buttonW) / 2;
+      const backY = HEIGHT - 120;
+      ctx.fillStyle = "red";
+      roundRect(ctx, backX, backY, buttonW, buttonH, 10, true, false);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      let backText = "Back";
+      let backTextWidth = ctx.measureText(backText).width;
+      ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
+      uiRects.skinsBack = { x: backX, y: backY, width: buttonW, height: buttonH };
+    }
+
+    function drawGameOver() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = "black";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.fillStyle = RED;
+      ctx.font = "72px sans-serif";
+      let goText = "Game Over!";
+      let goWidth = ctx.measureText(goText).width;
+      ctx.fillText(goText, (WIDTH - goWidth) / 2, HEIGHT / 2 - 50);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "36px sans-serif";
+      let scoreText = "Final Score: " + score;
+      let scoreWidth = ctx.measureText(scoreText).width;
+      ctx.fillText(scoreText, (WIDTH - scoreWidth) / 2, HEIGHT / 2);
+      let contText = "Click to return to menu";
+      let contWidth = ctx.measureText(contText).width;
+      ctx.fillText(contText, (WIDTH - contWidth) / 2, HEIGHT / 2 + 50);
+    }
+
+    // Utility function to draw rounded rectangles
     function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-      if (typeof radius === "undefined") { radius = 5; }
+      if (typeof stroke === 'undefined') {
+        stroke = true;
+      }
+      if (typeof radius === 'undefined') {
+        radius = 5;
+      }
       ctx.beginPath();
       ctx.moveTo(x + radius, y);
       ctx.lineTo(x + width - radius, y);
@@ -244,269 +373,214 @@
       ctx.lineTo(x, y + radius);
       ctx.quadraticCurveTo(x, y, x + radius, y);
       ctx.closePath();
-      if (fill) ctx.fill();
-      if (stroke) ctx.stroke();
-    }
-
-    // Helper: Check if a point is in a rectangle
-    function pointInRect(x, y, rect) {
-      return x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
-    }
-
-    /* ======================
-       Drawing Functions
-       ====================== */
-    function drawMenu() {
-      ctx.drawImage(snake_menu_bg, 0, 0, WIDTH, HEIGHT);
-      ctx.font = "72px sans-serif";
-      ctx.fillStyle = "#ffffff";
-      let titleText = "SNAKE GAME";
-      let titleWidth = ctx.measureText(titleText).width;
-      ctx.fillText(titleText, (WIDTH - titleWidth) / 2, HEIGHT / 2 - 100);
-      let buttonWidth = 140, buttonHeight = 60;
-      let buttonX = (WIDTH - buttonWidth) / 2;
-      let buttonY = HEIGHT / 2;
-      ctx.fillStyle = "rgb(0,200,0)";
-      roundRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, 10, true, false);
-      ctx.font = "36px sans-serif";
-      ctx.fillStyle = "#ffffff";
-      let playText = "Play";
-      let playWidth = ctx.measureText(playText).width;
-      ctx.fillText(playText, buttonX + (buttonWidth - playWidth) / 2, buttonY + buttonHeight / 2 + 12);
-      let iconX = buttonX + buttonWidth + 10;
-      let iconY = buttonY + (buttonHeight - 40) / 2;
-      ctx.drawImage(store_icon, iconX, iconY, 40, 40);
-      return {
-        playButtonRect: { x: buttonX, y: buttonY, width: buttonWidth, height: buttonHeight },
-        storeIconRect: { x: iconX, y: iconY, width: 40, height: 40 }
-      };
-    }
-
-    function drawStore() {
-      ctx.drawImage(store_bg, 0, 0, WIDTH, HEIGHT);
-      ctx.font = "72px sans-serif";
-      ctx.fillStyle = "#ffffff";
-      let storeTitle = "Store";
-      let titleWidth = ctx.measureText(storeTitle).width;
-      ctx.fillText(storeTitle, (WIDTH - titleWidth) / 2, 50);
-      let squareSize = 40, spacing = 10, colsGrid = 8;
-      let totalWidth = colsGrid * squareSize + (colsGrid - 1) * spacing;
-      let startX = (WIDTH - totalWidth) / 2;
-      let startY = 100;
-      let optionRects = [];
-      ctx.font = "16px sans-serif";
-      for (let i = 0; i < colorOptions.length; i++) {
-        let col = i % colsGrid;
-        let row = Math.floor(i / colsGrid);
-        let x = startX + col * (squareSize + spacing);
-        let y = startY + row * (squareSize + spacing);
-        ctx.fillStyle = colorOptions[i].color;
-        ctx.fillRect(x, y, squareSize, squareSize);
-        ctx.lineWidth = (colorOptions[i].color.toLowerCase() === snake_color.toLowerCase()) ? 3 : 1;
-        ctx.strokeStyle = "#000000";
-        ctx.strokeRect(x, y, squareSize, squareSize);
-        optionRects.push({ rect: { x, y, width: squareSize, height: squareSize }, color: colorOptions[i].color });
+      if (fill) {
+        ctx.fill();
       }
-      let buttonWidth = 140, buttonHeight = 60;
-      let buttonX = (WIDTH - buttonWidth) / 2;
-      let buttonY = HEIGHT - 100;
-      ctx.fillStyle = "rgb(200,0,0)";
-      roundRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, 10, true, false);
-      ctx.font = "36px sans-serif";
-      ctx.fillStyle = "#ffffff";
-      let backText = "Back";
-      let backWidth = ctx.measureText(backText).width;
-      ctx.fillText(backText, buttonX + (buttonWidth - backWidth) / 2, buttonY + buttonHeight / 2 + 12);
-      return {
-        backButtonRect: { x: buttonX, y: buttonY, width: buttonWidth, height: buttonHeight },
-        optionRects: optionRects
-      };
+      if (stroke) {
+        ctx.stroke();
+      }
     }
 
-    function drawGameOver() {
-      ctx.fillStyle = "#000000";
-      ctx.fillRect(0, 0, WIDTH, HEIGHT);
-      ctx.font = "72px sans-serif";
-      ctx.fillStyle = RED;
-      let gameOverText = "Game Over!";
-      let goWidth = ctx.measureText(gameOverText).width;
-      ctx.fillText(gameOverText, (WIDTH - goWidth) / 2, HEIGHT / 2 - 50);
-      ctx.font = "36px sans-serif";
-      ctx.fillStyle = "#ffffff";
-      let scoreText = "Final Score: " + score;
-      let scoreWidth = ctx.measureText(scoreText).width;
-      ctx.fillText(scoreText, (WIDTH - scoreWidth) / 2, HEIGHT / 2);
-      let contText = "Click to return to menu";
-      let contWidth = ctx.measureText(contText).width;
-      ctx.fillText(contText, (WIDTH - contWidth) / 2, HEIGHT / 2 + 50);
+    // --- Game Objects for Playing State ---
+    function initGame() {
+      resetGame();
+    }
+
+    // --- Main Loop ---
+    function mainLoop(timestamp) {
+      // Use timestamp to control update rate in "playing" state
+      if (gameState === "playing") {
+        if (!lastUpdateTime) lastUpdateTime = timestamp;
+        const delta = timestamp - lastUpdateTime;
+        if (delta > 1000 / speed) {
+          updatePlaying();
+          lastUpdateTime = timestamp;
+        }
+      }
+      requestAnimationFrame(mainLoop);
+    }
+
+    // --- Update playing state ---
+    function updatePlaying() {
+      // Update snake movement is already done via event handling and snake.move() in playing block.
+      // We'll simply redraw the playing state.
+      // (The playing state logic is handled in the event loop below.)
+      drawPlaying();
     }
 
     function drawPlaying() {
+      // Clear the top scoreboard area
       ctx.fillStyle = SCOREBOARD_BG;
       ctx.fillRect(0, 0, WIDTH, 100);
-      ctx.drawImage(grass_bg, 0, 100, WIDTH, HEIGHT - 100);
-      for (let seg of snake.body) {
-        ctx.fillStyle = snake_color;
-        ctx.fillRect(seg.x * GRID_SIZE, 100 + seg.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-      }
+      ctx.drawImage(grassBg, 0, 100, WIDTH, HEIGHT - 100);
+      // Draw snake
+      snake.body.forEach(seg => {
+        let x = seg.x * GRID_SIZE;
+        let y = 100 + seg.y * GRID_SIZE;
+        if (snakeSkin) {
+          // Scale skin to grid size
+          ctx.drawImage(snakeSkin, x, y, GRID_SIZE, GRID_SIZE);
+        } else {
+          ctx.fillStyle = snakeColor;
+          ctx.fillRect(x, y, GRID_SIZE, GRID_SIZE);
+        }
+      });
+      // Draw food
       if (food.position) {
         ctx.fillStyle = RED;
         ctx.fillRect(food.position.x * GRID_SIZE, 100 + food.position.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
       }
-      ctx.fillStyle = GRAY;
-      for (let obs of obstacles) {
+      // Draw obstacles
+      obstacles.forEach(obs => {
+        ctx.fillStyle = GRAY;
         ctx.fillRect(obs.x * GRID_SIZE, 100 + obs.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
-      }
-      ctx.font = "36px sans-serif";
+      });
+      // Draw scoreboard info
       ctx.fillStyle = BLACK;
-      let scoreText = "Score: " + score + "  Level: " + level;
-      ctx.fillText(scoreText, 10, 40);
+      ctx.font = "36px sans-serif";
+      ctx.fillText("Score: " + score + "  Level: " + level, 10, 40);
+      ctx.fillStyle = GOLD;
+      ctx.fillText("Coins: " + coinCount, 300, 40);
       if (bonusActive) {
         ctx.fillStyle = GOLD;
-        let bonusText = "🔥 3× BONUS ACTIVE! 🔥";
-        let bonusWidth = ctx.measureText(bonusText).width;
-        ctx.fillText(bonusText, (WIDTH - bonusWidth) / 2, 40);
+        ctx.font = "24px sans-serif";
+        ctx.fillText("🔥 3× BONUS ACTIVE! 🔥", 300, 70);
       }
     }
 
-    function draw() {
+    // --- Mouse Event Handling ---
+    canvas.addEventListener("click", function(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const mousePos = {
+        x: evt.clientX - rect.left,
+        y: evt.clientY - rect.top
+      };
+      handleClick(mousePos);
+    });
+
+    function handleClick(pos) {
       if (gameState === "menu") {
-        let rects = drawMenu();
-        menuPlayButtonRect = rects.playButtonRect;
-        menuStoreIconRect = rects.storeIconRect;
-      } else if (gameState === "store") {
-        let rects = drawStore();
-        storeBackButtonRect = rects.backButtonRect;
-        storeOptionRects = rects.optionRects;
-      } else if (gameState === "game_over") {
-        drawGameOver();
-      }
-    }
-
-    /* ======================
-       Game Loop for Playing State
-       ====================== */
-    function playingGameLoop() {
-      // If gameState is not "playing", then if it's "game_over", display the game over screen and stop.
-      if (gameState !== "playing") {
-        if (gameState === "game_over") {
-          drawGameOver();
-        }
-        return;
-      }
-      updatePlaying();
-      // If gameState changed to "game_over" during update, draw game over screen.
-      if (gameState === "game_over") {
-        drawGameOver();
-        return;
-      }
-      drawPlaying();
-      gameLoopTimeout = setTimeout(playingGameLoop, speed);
-    }
-
-    function updatePlaying() {
-      let head = { ...snake.body[0] };
-      head.x = (head.x + snake.direction.x + COLS) % COLS;
-      head.y = (head.y + snake.direction.y + ROWS) % ROWS;
-      // Check self-collision (ignore head)
-      if (snake.body.slice(1).some(seg => seg.x === head.x && seg.y === head.y)) {
-        gameState = "game_over";
-        return;
-      }
-      snake.body.unshift(head);
-      // Check collision with obstacles
-      if (obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
-        if (snake.body.length > 1) {
-          snake.body.pop();
-        } else {
-          gameState = "game_over";
-          return;
-        }
-      }
-      // Check food collision
-      if (food.position && head.x === food.position.x && head.y === food.position.y) {
-        snake.grow();
-        appleCount++;
-        if (bonusActive) {
-          score += 30;
-          bonusActive = false;
-        } else {
-          score += 10;
-        }
-        addObstacle();
-        food.respawn();
-        if (appleCount === 3) {
-          bonusActive = true;
-          appleCount = 0;
-        }
-        if (score % 50 === 0) {
-          level += 1;
-          speed = Math.max(50, speed - 10);
-        }
-      } else {
-        snake.body.pop();
-      }
-      // Check for snake death if no segments remain
-      if (snake.body.length === 0) {
-        gameState = "game_over";
-        return;
-      }
-    }
-
-    /* ======================
-       Mouse Event Handling
-       ====================== */
-    canvas.addEventListener("click", function (event) {
-      let rect = canvas.getBoundingClientRect();
-      let x = event.clientX - rect.left;
-      let y = event.clientY - rect.top;
-      if (gameState === "playing") {
-        if (y < 100) return;
-        let grid_x = Math.floor(x / GRID_SIZE);
-        let grid_y = Math.floor((y - 100) / GRID_SIZE);
-        let head = snake.body[0];
-        let dx = grid_x - head.x;
-        let dy = grid_y - head.y;
-        let newDir;
-        if (Math.abs(dx) > Math.abs(dy)) {
-          newDir = dx > 0 ? RIGHT : LEFT;
-        } else {
-          newDir = dy > 0 ? DOWN : UP;
-        }
-        // Prevent reversing direction
-        if (!(snake.direction.x + newDir.x === 0 && snake.direction.y + newDir.y === 0)) {
-          snake.direction = newDir;
-        }
-      } else if (gameState === "menu") {
-        if (menuPlayButtonRect && pointInRect(x, y, menuPlayButtonRect)) {
+        if (pointInRect(pos, uiRects.playButton)) {
           resetGame();
           gameState = "playing";
-          playingGameLoop();
-        } else if (menuStoreIconRect && pointInRect(x, y, menuStoreIconRect)) {
+        } else if (pointInRect(pos, uiRects.storeIcon)) {
           gameState = "store";
-          draw();
+        } else if (pointInRect(pos, uiRects.coinIcon)) {
+          console.log("Coin icon clicked! (Add your own logic here)");
         }
       } else if (gameState === "store") {
-        if (storeOptionRects) {
-          for (let opt of storeOptionRects) {
-            if (pointInRect(x, y, opt.rect)) {
-              snake_color = opt.color;
+        // Check color grid
+        for (let opt of uiRects.colorOptions) {
+          if (pointInRect(pos, opt.rect)) {
+            snakeColor = opt.value;
+          }
+        }
+        if (pointInRect(pos, uiRects.storeBack)) {
+          gameState = "menu";
+        } else if (pointInRect(pos, uiRects.skinsButton)) {
+          gameState = "skins";
+        }
+      } else if (gameState === "skins") {
+        for (let opt of uiRects.maskOptions) {
+          if (pointInRect(pos, opt.rect)) {
+            if (coinCount >= 5000) {
+              coinCount -= 5000;
+              snakeSkin = opt.img;
+            } else {
+              console.log("Not enough coins for this skin!");
             }
           }
         }
-        if (storeBackButtonRect && pointInRect(x, y, storeBackButtonRect)) {
-          gameState = "menu";
-          draw();
+        if (pointInRect(pos, uiRects.skinsBack)) {
+          gameState = "store";
+        }
+      } else if (gameState === "playing") {
+        // In playing state, mouse click changes snake direction
+        const head = snake.body[0];
+        const gridX = Math.floor(pos.x / GRID_SIZE);
+        const gridY = Math.floor((pos.y - 100) / GRID_SIZE);
+        if (gridY >= 0) {
+          const dx = gridX - head.x;
+          const dy = gridY - head.y;
+          let newDir;
+          if (Math.abs(dx) > Math.abs(dy)) {
+            newDir = dx > 0 ? RIGHT : LEFT;
+          } else {
+            newDir = dy > 0 ? DOWN : UP;
+          }
+          if (!(newDir.x === -snake.direction.x && newDir.y === -snake.direction.y)) {
+            snake.direction = newDir;
+          }
         }
       } else if (gameState === "game_over") {
-        // On game over, click anywhere to return to menu
         gameState = "menu";
-        draw();
       }
-    });
+    }
 
-    // Start by drawing the menu
-    draw();
+    // --- Game Loop for Playing State Logic ---
+    function updateGameLogic() {
+      if (gameState === "playing") {
+        snake.move();
+        // Check self-collision
+        const head = snake.body[0];
+        if (snake.body.slice(1).some(seg => seg.x === head.x && seg.y === head.y)) {
+          gameState = "game_over";
+          return;
+        }
+        // Check obstacle collision
+        if (obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
+          if (snake.body.length > 1) {
+            snake.body.pop();
+          } else {
+            gameState = "game_over";
+            return;
+          }
+        }
+        // Check food collision
+        if (food.position && head.x === food.position.x && head.y === food.position.y) {
+          snake.grow();
+          appleCount++;
+          score += bonusActive ? 30 : 10;
+          coinCount += 100;
+          addObstacle();
+          food.respawn();
+          if (appleCount === 3) {
+            bonusActive = true;
+            appleCount = 0;
+          }
+          if (score % 50 === 0) {
+            level++;
+            speed += 2;
+          }
+        }
+      }
+    }
+
+    // --- Main Loop ---
+    function gameLoop(timestamp) {
+      if (gameState === "playing") {
+        if (!lastUpdateTime) lastUpdateTime = timestamp;
+        const delta = timestamp - lastUpdateTime;
+        if (delta > 1000 / speed) {
+          updateGameLogic();
+          lastUpdateTime = timestamp;
+        }
+        drawPlaying();
+      } else if (gameState === "menu") {
+        drawMenu();
+      } else if (gameState === "store") {
+        drawStore();
+      } else if (gameState === "skins") {
+        drawSkins();
+      } else if (gameState === "game_over") {
+        drawGameOver();
+      }
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start the game loop
+    requestAnimationFrame(gameLoop);
+
   </script>
 </body>
 </html>

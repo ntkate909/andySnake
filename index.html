@@ -1,433 +1,523 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <title>My Python Game</title>
-    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/brython@3.10.2/brython.min.js"></script>
+  <meta charset="UTF-8">
+  <title>Snake Game with Store & Color Selector</title>
+  <style>
+    body {
+      margin: 0;
+      background: #222;
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      /* (Optional) add a subtle shadow */
+      box-shadow: 0 0 10px #000;
+    }
+  </style>
 </head>
-<body onload="brython()">
-    <h1>My Python Game</h1>
-    <script type="text/python">
-import pygame
-import sys
-import random
+<body>
+  <canvas id="gameCanvas" width="600" height="700"></canvas>
+  <script>
+    /* ======================
+       Global Constants & Variables
+       ====================== */
+    const WIDTH = 600;
+    const HEIGHT = 700;
+    const GRID_SIZE = 20;
+    const ROWS = Math.floor((HEIGHT - 100) / GRID_SIZE);
+    const COLS = Math.floor(WIDTH / GRID_SIZE);
 
-pygame.init()
+    // Colors
+    const RED = "#ff0000";
+    const BLACK = "#000000";
+    const GRAY = "#969696";
+    const GOLD = "#ffd700";
+    const SCOREBOARD_BG = "#e6e6e6";
 
-# Screen dimensions
-WIDTH, HEIGHT = 600, 700
-GRID_SIZE = 20
-ROWS, COLS = (HEIGHT - 100) // GRID_SIZE, WIDTH // GRID_SIZE  # Game area below the 100px scoreboard/menu
+    // Global snake color (default green)
+    let snake_color = "#00ff00";
 
-# Basic Colors (used for UI elements)
-RED = (255, 0, 0)
-BLACK = (0, 0, 0)
-GRAY = (150, 150, 150)
-GOLD = (255, 215, 0)
-SCOREBOARD_BG = (230, 230, 230)
+    // Game state can be "menu", "store", "playing", or "game_over"
+    let gameState = "menu";
+    let gameLoopTimeout;
 
-# Global snake color (default)
-snake_color = (0, 255, 0)  # Default to green
+    // Game variables (set/reset in resetGame)
+    let snake = null;
+    let food = null;
+    let score = 0;
+    let level = 1;
+    let speed = 150; // Delay in ms (lower = faster)
+    let appleCount = 0;
+    let bonusActive = false;
+    // Obstacles are stored as objects with {x, y} in grid coordinates
+    let obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
 
-# Set up display
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Snake Game with Store, Color Selector & Obstacle Penalty")
+    // Variables to store clickable rectangles in menu and store screens
+    let menuPlayButtonRect, menuStoreIconRect;
+    let storeBackButtonRect, storeOptionRects;
 
-# Fonts
-font = pygame.font.Font(None, 36)
-big_font = pygame.font.Font(None, 72)
+    // Define color options (name and hex value)
+    const colorOptions = [
+      { name: "Red", color: "#ff0000" },
+      { name: "Blue", color: "#0000ff" },
+      { name: "Green", color: "#00ff00" },
+      { name: "Orange", color: "#ffa500" },
+      { name: "White", color: "#ffffff" },
+      { name: "Black", color: "#000000" },
+      { name: "Yellow", color: "#ffff00" },
+      { name: "Purple", color: "#800080" },
+      { name: "Silver", color: "#c0c0c0" },
+      { name: "Brown", color: "#a52a2a" },
+      { name: "Gray", color: "#808080" },
+      { name: "Pink", color: "#ffc0cb" },
+      { name: "Olive", color: "#808000" },
+      { name: "Maroon", color: "#800000" },
+      { name: "Violet", color: "#ee82ee" },
+      { name: "Charcoal", color: "#36454f" },
+      { name: "Magenta", color: "#ff00ff" },
+      { name: "Bronze", color: "#cd7f32" },
+      { name: "Cream", color: "#fffdd0" },
+      { name: "Gold", color: "#ffd700" },
+      { name: "Tan", color: "#d2b48c" },
+      { name: "Teal", color: "#008080" },
+      { name: "Mustard", color: "#ffdb58" },
+      { name: "Navy Blue", color: "#000080" },
+      { name: "Coral", color: "#ff7f50" },
+      { name: "Burgundy", color: "#800020" },
+      { name: "Lavender", color: "#e6e6fa" },
+      { name: "Mauve", color: "#e0b0ff" },
+      { name: "Cyan", color: "#e0f7fa" },
+      { name: "Peach", color: "#ffe5b4" },
+      { name: "Rust", color: "#b7410e" },
+      { name: "Indigo", color: "#4b0082" },
+      { name: "Ruby", color: "#e0115f" },
+      { name: "Lime Green", color: "#32cd32" },
+      { name: "Salmon", color: "#fa8072" },
+      { name: "Azure", color: "#007fff" },
+      { name: "Beige", color: "#f5f5dc" },
+      { name: "Copper Rose", color: "#996666" },
+      { name: "Turquoise", color: "#40e0d0" },
+      { name: "Aqua", color: "#00ffff" },
+      { name: "Mint", color: "#3eb489" },
+      { name: "Sky Blue", color: "#87ceeb" },
+      { name: "Crimson", color: "#dc143c" },
+      { name: "Saffron", color: "#f4c430" },
+      { name: "Lemon Yellow", color: "#fff44f" },
+      { name: "Grapevine", color: "#43254f" },
+      { name: "Fuschia", color: "#ff00ff" },
+      { name: "Amber", color: "#ffbf00" },
+      { name: "Sea Green", color: "#2e8b57" },
+      { name: "Dark Green", color: "#006400" },
+      { name: "Pearl", color: "#eae0c8" },
+      { name: "Ivory", color: "#fffff0" },
+      { name: "Tangerine", color: "#f28500" },
+      { name: "Garnet", color: "#733635" },
+      { name: "Cherry Red", color: "#de3163" },
+      { name: "Emerald", color: "#50c878" },
+      { name: "Brunette", color: "#664238" },
+      { name: "Sapphire", color: "#0f52ba" },
+      { name: "Lilac", color: "#c8a2c8" },
+      { name: "Rosewood", color: "#65000b" },
+      { name: "Arctic Blue", color: "#0000ff" },
+      { name: "Ash", color: "#808080" },
+      { name: "Mocha", color: "#C0A392" },
+      { name: "Coffee Brown", color: "#6f4e37" },
+      { name: "Jet Black", color: "#0a0a0a" },
+      { name: "Pista Green", color: "#00ff00" }
+    ];
 
-# Directions
-UP = (0, -1)
-DOWN = (0, 1)
-LEFT = (-1, 0)
-RIGHT = (1, 0)
-OPPOSITE = {UP: DOWN, DOWN: UP, LEFT: RIGHT, RIGHT: LEFT}
+    // Load external images
+    const grass_bg = new Image();
+    grass_bg.src = "grass_bg.png";
+    const store_icon = new Image();
+    store_icon.src = "store_icon.png";
+    const store_bg = new Image();
+    store_bg.src = "cat_bg.png";
+    const snake_menu_bg = new Image();
+    snake_menu_bg.src = "snake_menu_bg.png";
 
-# Obstacles (initially two obstacles in grid coordinates)
-obstacles = [(10, 8), (15, 12)]
+    // Direction constants
+    const UP = { x: 0, y: -1 };
+    const DOWN = { x: 0, y: 1 };
+    const LEFT = { x: -1, y: 0 };
+    const RIGHT = { x: 1, y: 0 };
 
-# ========== Load external images ==========
+    /* ======================
+       Class Definitions
+       ====================== */
+    class Snake {
+      constructor() {
+        this.body = [{ x: 5, y: 5 }];
+        this.direction = RIGHT;
+        this.growing = false;
+      }
+      move() {
+        let head = this.body[0];
+        let new_head = {
+          x: (head.x + this.direction.x + COLS) % COLS,
+          y: (head.y + this.direction.y + ROWS) % ROWS
+        };
+        this.body.unshift(new_head);
+        if (this.growing) {
+          this.growing = false;
+        } else {
+          this.body.pop();
+        }
+      }
+      grow() {
+        this.growing = true;
+      }
+    }
 
-# 1) Background for the play area
-grass_bg = pygame.image.load("grass_bg.png").convert_alpha()
-grass_bg = pygame.transform.scale(grass_bg, (WIDTH, HEIGHT - 100))
+    class Food {
+      constructor() {
+        this.position = this.generateNewPosition();
+      }
+      generateNewPosition() {
+        let available = [];
+        for (let x = 0; x < COLS; x++) {
+          for (let y = 0; y < ROWS; y++) {
+            if (
+              !snake.body.some(seg => seg.x === x && seg.y === y) &&
+              !obstacles.some(obs => obs.x === x && obs.y === y)
+            ) {
+              available.push({ x, y });
+            }
+          }
+        }
+        return available.length ? available[Math.floor(Math.random() * available.length)] : null;
+      }
+      respawn() {
+        this.position = this.generateNewPosition();
+      }
+    }
 
-# 2) Icon for the store button
-store_icon = pygame.image.load("store_icon.png").convert_alpha()
-store_icon = pygame.transform.scale(store_icon, (40, 40))
+    /* ======================
+       Helper Functions
+       ====================== */
+    function resetGame() {
+      snake = new Snake();
+      food = new Food();
+      score = 0;
+      level = 1;
+      speed = 150;
+      appleCount = 0;
+      bonusActive = false;
+      obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
+    }
 
-# 3) Cat image for the store background
-store_bg = pygame.image.load("cat_bg.png").convert_alpha()
-store_bg = pygame.transform.scale(store_bg, (WIDTH, HEIGHT))
+    function addObstacle() {
+      if (obstacles.length < 10) {
+        let available = [];
+        for (let x = 0; x < COLS; x++) {
+          for (let y = 0; y < ROWS; y++) {
+            if (
+              !snake.body.some(seg => seg.x === x && seg.y === y) &&
+              !obstacles.some(obs => obs.x === x && obs.y === y) &&
+              (food.position.x !== x || food.position.y !== y)
+            ) {
+              available.push({ x, y });
+            }
+          }
+        }
+        if (available.length) {
+          let new_obs = available[Math.floor(Math.random() * available.length)];
+          obstacles.push(new_obs);
+        }
+      }
+    }
 
-# 4) **Snake image** for the home (menu) background
-snake_menu_bg = pygame.image.load("snake_menu_bg.png").convert_alpha()
-snake_menu_bg = pygame.transform.scale(snake_menu_bg, (WIDTH, HEIGHT))
+    // Draw a rounded rectangle on the canvas
+    function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
+      if (typeof radius === "undefined") {
+        radius = 5;
+      }
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+      if (fill) ctx.fill();
+      if (stroke) ctx.stroke();
+    }
 
-# ========== Define Color Options ==========
-color_options = [
-    ("Red", pygame.Color("#ff0000")),
-    ("Blue", pygame.Color("#0000ff")),
-    ("Green", pygame.Color("#00ff00")),
-    ("Orange", pygame.Color("#ffa500")),
-    ("White", pygame.Color("#ffffff")),
-    ("Black", pygame.Color("#000000")),
-    ("Yellow", pygame.Color("#ffff00")),
-    ("Purple", pygame.Color("#800080")),
-    ("Silver", pygame.Color("#c0c0c0")),
-    ("Brown", pygame.Color("#a52a2a")),
-    ("Gray", pygame.Color("#808080")),
-    ("Pink", pygame.Color("#ffc0cb")),
-    ("Olive", pygame.Color("#808000")),
-    ("Maroon", pygame.Color("#800000")),
-    ("Violet", pygame.Color("#ee82ee")),
-    ("Charcoal", pygame.Color("#36454f")),
-    ("Magenta", pygame.Color("#ff00ff")),
-    ("Bronze", pygame.Color("#cd7f32")),
-    ("Cream", pygame.Color("#fffdd0")),
-    ("Gold", pygame.Color("#ffd700")),
-    ("Tan", pygame.Color("#d2b48c")),
-    ("Teal", pygame.Color("#008080")),
-    ("Mustard", pygame.Color("#ffdb58")),
-    ("Navy Blue", pygame.Color("#000080")),
-    ("Coral", pygame.Color("#ff7f50")),
-    ("Burgundy", pygame.Color("#800020")),
-    ("Lavender", pygame.Color("#e6e6fa")),
-    ("Mauve", pygame.Color("#e0b0ff")),
-    ("Cyan", pygame.Color("#e0f7fa")),
-    ("Peach", pygame.Color("#ffe5b4")),
-    ("Rust", pygame.Color("#b7410e")),
-    ("Indigo", pygame.Color("#4b0082")),
-    ("Ruby", pygame.Color("#e0115f")),
-    ("Lime Green", pygame.Color("#32cd32")),
-    ("Salmon", pygame.Color("#fa8072")),
-    ("Azure", pygame.Color("#007fff")),
-    ("Beige", pygame.Color("#f5f5dc")),
-    ("Copper Rose", pygame.Color("#996666")),
-    ("Turquoise", pygame.Color("#40e0d0")),
-    ("Aqua", pygame.Color("#00ffff")),
-    ("Mint", pygame.Color("#3eb489")),
-    ("Sky Blue", pygame.Color("#87ceeb")),
-    ("Crimson", pygame.Color("#dc143c")),
-    ("Saffron", pygame.Color("#f4c430")),
-    ("Lemon Yellow", pygame.Color("#fff44f")),
-    ("Grapevine", pygame.Color("#43254f")),
-    ("Fuschia", pygame.Color("#ff00ff")),
-    ("Amber", pygame.Color("#ffbf00")),
-    ("Sea Green", pygame.Color("#2e8b57")),
-    ("Dark Green", pygame.Color("#006400")),
-    ("Pearl", pygame.Color("#eae0c8")),
-    ("Ivory", pygame.Color("#fffff0")),
-    ("Tangerine", pygame.Color("#f28500")),
-    ("Garnet", pygame.Color("#733635")),
-    ("Cherry Red", pygame.Color("#de3163")),
-    ("Emerald", pygame.Color("#50c878")),
-    ("Brunette", pygame.Color("#664238")),
-    ("Sapphire", pygame.Color("#0f52ba")),
-    ("Lilac", pygame.Color("#c8a2c8")),
-    ("Rosewood", pygame.Color("#65000b")),
-    ("Arctic Blue", pygame.Color("#0000ff")),
-    ("Ash", pygame.Color("#808080")),
-    ("Mocha", pygame.Color("#C0A392")),
-    ("Coffee Brown", pygame.Color("#6f4e37")),
-    ("Jet Black", pygame.Color("#0a0a0a")),
-    ("Pista Green", pygame.Color("#00ff00"))
-]
+    // Helper: Check if a point (x, y) lies inside a rectangle
+    function pointInRect(x, y, rect) {
+      return (
+        x >= rect.x &&
+        x <= rect.x + rect.width &&
+        y >= rect.y &&
+        y <= rect.y + rect.height
+      );
+    }
 
-# ========== Game Classes ==========
-class Snake:
-    def __init__(self):
-        self.body = [(5, 5)]
-        self.direction = RIGHT
-        self.growing = False
+    /* ======================
+       Drawing Functions for Different Screens
+       ====================== */
+    function drawMenu() {
+      // Draw menu background using the snake_menu_bg image
+      ctx.drawImage(snake_menu_bg, 0, 0, WIDTH, HEIGHT);
+      // Draw title
+      ctx.font = "72px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      let titleText = "SNAKE GAME";
+      let titleWidth = ctx.measureText(titleText).width;
+      ctx.fillText(titleText, (WIDTH - titleWidth) / 2, HEIGHT / 2 - 100);
+      // Draw Play button
+      let buttonWidth = 140,
+        buttonHeight = 60;
+      let buttonX = (WIDTH - buttonWidth) / 2;
+      let buttonY = HEIGHT / 2;
+      ctx.fillStyle = "rgb(0,200,0)";
+      roundRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, 10, true, false);
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      let playText = "Play";
+      let playWidth = ctx.measureText(playText).width;
+      ctx.fillText(playText, buttonX + (buttonWidth - playWidth) / 2, buttonY + buttonHeight / 2 + 12);
+      // Draw store icon next to the Play button
+      let iconX = buttonX + buttonWidth + 10;
+      let iconY = buttonY + (buttonHeight - 40) / 2;
+      ctx.drawImage(store_icon, iconX, iconY, 40, 40);
+      return {
+        playButtonRect: { x: buttonX, y: buttonY, width: buttonWidth, height: buttonHeight },
+        storeIconRect: { x: iconX, y: iconY, width: 40, height: 40 }
+      };
+    }
 
-    def move(self):
-        head_x, head_y = self.body[0]
-        new_head = (head_x + self.direction[0], head_y + self.direction[1])
-        new_head = (new_head[0] % COLS, new_head[1] % ROWS)
-        self.body.insert(0, new_head)
-        if self.growing:
-            self.growing = False
-        else:
-            self.body.pop()
+    function drawStore() {
+      // Draw store background using the cat image
+      ctx.drawImage(store_bg, 0, 0, WIDTH, HEIGHT);
+      ctx.font = "72px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      let storeTitle = "Store";
+      let titleWidth = ctx.measureText(storeTitle).width;
+      ctx.fillText(storeTitle, (WIDTH - titleWidth) / 2, 50);
+      // Draw color selection grid
+      let squareSize = 40;
+      let spacing = 10;
+      let colsGrid = 8;
+      let totalWidth = colsGrid * squareSize + (colsGrid - 1) * spacing;
+      let startX = (WIDTH - totalWidth) / 2;
+      let startY = 100;
+      let optionRects = [];
+      ctx.font = "16px sans-serif";
+      for (let i = 0; i < colorOptions.length; i++) {
+        let col = i % colsGrid;
+        let row = Math.floor(i / colsGrid);
+        let x = startX + col * (squareSize + spacing);
+        let y = startY + row * (squareSize + spacing);
+        ctx.fillStyle = colorOptions[i].color;
+        ctx.fillRect(x, y, squareSize, squareSize);
+        if (colorOptions[i].color.toLowerCase() === snake_color.toLowerCase()) {
+          ctx.lineWidth = 3;
+        } else {
+          ctx.lineWidth = 1;
+        }
+        ctx.strokeStyle = "#000000";
+        ctx.strokeRect(x, y, squareSize, squareSize);
+        optionRects.push({ rect: { x, y, width: squareSize, height: squareSize }, color: colorOptions[i].color });
+      }
+      // Draw Back button
+      let buttonWidth = 140,
+        buttonHeight = 60;
+      let buttonX = (WIDTH - buttonWidth) / 2;
+      let buttonY = HEIGHT - 100;
+      ctx.fillStyle = "rgb(200,0,0)";
+      roundRect(ctx, buttonX, buttonY, buttonWidth, buttonHeight, 10, true, false);
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      let backText = "Back";
+      let backWidth = ctx.measureText(backText).width;
+      ctx.fillText(backText, buttonX + (buttonWidth - backWidth) / 2, buttonY + buttonHeight / 2 + 12);
+      return {
+        backButtonRect: { x: buttonX, y: buttonY, width: buttonWidth, height: buttonHeight },
+        optionRects: optionRects
+      };
+    }
 
-    def grow(self):
-        self.growing = True
+    function drawGameOver() {
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.font = "72px sans-serif";
+      ctx.fillStyle = RED;
+      let gameOverText = "Game Over!";
+      let gameOverWidth = ctx.measureText(gameOverText).width;
+      ctx.fillText(gameOverText, (WIDTH - gameOverWidth) / 2, HEIGHT / 2 - 50);
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = "#ffffff";
+      let scoreText = "Final Score: " + score;
+      let scoreWidth = ctx.measureText(scoreText).width;
+      ctx.fillText(scoreText, (WIDTH - scoreWidth) / 2, HEIGHT / 2);
+      let contText = "Click to return to menu";
+      let contWidth = ctx.measureText(contText).width;
+      ctx.fillText(contText, (WIDTH - contWidth) / 2, HEIGHT / 2 + 50);
+    }
 
-class Food:
-    def __init__(self):
-        self.position = self.generate_new_position()
+    function drawPlaying() {
+      // Draw scoreboard area
+      ctx.fillStyle = SCOREBOARD_BG;
+      ctx.fillRect(0, 0, WIDTH, 100);
+      // Draw grass background for the play area
+      ctx.drawImage(grass_bg, 0, 100, WIDTH, HEIGHT - 100);
+      // Draw snake
+      for (let seg of snake.body) {
+        ctx.fillStyle = snake_color;
+        ctx.fillRect(seg.x * GRID_SIZE, 100 + seg.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+      }
+      // Draw food
+      if (food.position) {
+        ctx.fillStyle = RED;
+        ctx.fillRect(food.position.x * GRID_SIZE, 100 + food.position.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+      }
+      // Draw obstacles
+      ctx.fillStyle = GRAY;
+      for (let obs of obstacles) {
+        ctx.fillRect(obs.x * GRID_SIZE, 100 + obs.y * GRID_SIZE, GRID_SIZE, GRID_SIZE);
+      }
+      // Draw scoreboard text
+      ctx.font = "36px sans-serif";
+      ctx.fillStyle = BLACK;
+      let scoreText = "Score: " + score + "  Level: " + level;
+      ctx.fillText(scoreText, 10, 40);
+      if (bonusActive) {
+        ctx.fillStyle = GOLD;
+        let bonusText = "🔥 3× BONUS ACTIVE! 🔥";
+        let bonusWidth = ctx.measureText(bonusText).width;
+        ctx.fillText(bonusText, (WIDTH - bonusWidth) / 2, 40);
+      }
+    }
 
-    def generate_new_position(self):
-        available_spaces = [
-            (x, y) for x in range(COLS) for y in range(ROWS)
-            if (x, y) not in snake.body and (x, y) not in obstacles
-        ]
-        if available_spaces:
-            return random.choice(available_spaces)
-        return None
+    function draw() {
+      if (gameState === "menu") {
+        let rects = drawMenu();
+        menuPlayButtonRect = rects.playButtonRect;
+        menuStoreIconRect = rects.storeIconRect;
+      } else if (gameState === "store") {
+        let rects = drawStore();
+        storeBackButtonRect = rects.backButtonRect;
+        storeOptionRects = rects.optionRects;
+      } else if (gameState === "game_over") {
+        drawGameOver();
+      }
+    }
 
-    def respawn(self):
-        self.position = self.generate_new_position()
+    /* ======================
+       Game Loop for Playing State
+       ====================== */
+    function playingGameLoop() {
+      if (gameState !== "playing") return;
+      updatePlaying();
+      drawPlaying();
+      gameLoopTimeout = setTimeout(playingGameLoop, speed);
+    }
 
-# Game variables (reset when starting a new game)
-snake = None
-food = None
-score = 0
-level = 1
-speed = 10
-apple_count = 0
-bonus_active = False
+    function updatePlaying() {
+      let head = { ...snake.body[0] };
+      head.x = (head.x + snake.direction.x + COLS) % COLS;
+      head.y = (head.y + snake.direction.y + ROWS) % ROWS;
+      // Check self-collision (ignore head)
+      if (snake.body.slice(1).some(seg => seg.x === head.x && seg.y === head.y)) {
+        gameState = "game_over";
+        return;
+      }
+      snake.body.unshift(head);
+      // Check obstacle collision
+      if (obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
+        if (snake.body.length > 1) {
+          snake.body.pop();
+        } else {
+          gameState = "game_over";
+          return;
+        }
+      }
+      // Check food collision
+      if (food.position && head.x === food.position.x && head.y === food.position.y) {
+        snake.grow();
+        appleCount++;
+        if (bonusActive) {
+          score += 30;
+          bonusActive = false;
+        } else {
+          score += 10;
+        }
+        addObstacle();
+        food.respawn();
+        if (appleCount === 3) {
+          bonusActive = true;
+          appleCount = 0;
+        }
+        if (score % 50 === 0) {
+          level += 1;
+          speed = Math.max(50, speed - 10);
+        }
+      } else {
+        snake.body.pop();
+      }
+    }
 
-clock = pygame.time.Clock()
+    /* ======================
+       Mouse Event Handling
+       ====================== */
+    const canvas = document.getElementById("gameCanvas");
+    canvas.addEventListener("click", function (event) {
+      let rect = canvas.getBoundingClientRect();
+      let x = event.clientX - rect.left;
+      let y = event.clientY - rect.top;
+      if (gameState === "playing") {
+        // Ignore clicks in the scoreboard area
+        if (y < 100) return;
+        let grid_x = Math.floor(x / GRID_SIZE);
+        let grid_y = Math.floor((y - 100) / GRID_SIZE);
+        let head = snake.body[0];
+        let dx = grid_x - head.x;
+        let dy = grid_y - head.y;
+        let newDir;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          newDir = dx > 0 ? RIGHT : LEFT;
+        } else {
+          newDir = dy > 0 ? DOWN : UP;
+        }
+        // Prevent reversing direction
+        if (!(snake.direction.x + newDir.x === 0 && snake.direction.y + newDir.y === 0)) {
+          snake.direction = newDir;
+        }
+      } else if (gameState === "menu") {
+        if (menuPlayButtonRect && pointInRect(x, y, menuPlayButtonRect)) {
+          resetGame();
+          gameState = "playing";
+          playingGameLoop();
+        } else if (menuStoreIconRect && pointInRect(x, y, menuStoreIconRect)) {
+          gameState = "store";
+          draw();
+        }
+      } else if (gameState === "store") {
+        if (storeOptionRects) {
+          for (let opt of storeOptionRects) {
+            if (pointInRect(x, y, opt.rect)) {
+              snake_color = opt.color;
+            }
+          }
+        }
+        if (storeBackButtonRect && pointInRect(x, y, storeBackButtonRect)) {
+          gameState = "menu";
+          draw();
+        }
+      } else if (gameState === "game_over") {
+        gameState = "menu";
+        draw();
+      }
+    });
 
-# ========== Helper Functions ==========
-
-def reset_game():
-    global snake, food, score, level, speed, apple_count, bonus_active, obstacles
-    snake = Snake()
-    food = Food()
-    score = 0
-    level = 1
-    speed = 10
-    apple_count = 0
-    bonus_active = False
-    obstacles = [(10, 8), (15, 12)]  # Reset to initial obstacles
-
-def add_obstacle():
-    if len(obstacles) < 10:
-        available_spaces = [
-            (x, y) for x in range(COLS) for y in range(ROWS)
-            if (x, y) not in snake.body and (x, y) not in obstacles and (x, y) != food.position
-        ]
-        if available_spaces:
-            new_obstacle = random.choice(available_spaces)
-            obstacles.append(new_obstacle)
-
-# ========== Main Screens ==========
-
-def draw_menu():
-    # **Use the snake image** for the menu background
-    screen.blit(snake_menu_bg, (0, 0))
-
-    title_text = big_font.render("SNAKE GAME", True, (255, 255, 255))
-    title_rect = title_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 100))
-    screen.blit(title_text, title_rect)
-
-    # Play button
-    button_width, button_height = 140, 60
-    button_x = WIDTH // 2 - button_width // 2
-    button_y = HEIGHT // 2
-    play_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
-    pygame.draw.rect(screen, (0, 200, 0), play_button_rect, border_radius=10)
-    play_text = font.render("Play", True, (255, 255, 255))
-    play_rect = play_text.get_rect(center=play_button_rect.center)
-    screen.blit(play_text, play_rect)
-
-    # Store icon next to Play button
-    icon_x = play_button_rect.right + 10
-    icon_y = play_button_rect.centery - store_icon.get_height() // 2
-    store_icon_rect = store_icon.get_rect(topleft=(icon_x, icon_y))
-    screen.blit(store_icon, (icon_x, icon_y))
-
-    pygame.display.flip()
-    return play_button_rect, store_icon_rect
-
-def draw_store():
-    # Cat background for the store
-    screen.blit(store_bg, (0, 0))
-
-    store_title = big_font.render("Store", True, (255, 255, 255))
-    title_rect = store_title.get_rect(center=(WIDTH // 2, 50))
-    screen.blit(store_title, title_rect)
-
-    # Draw color selection grid
-    square_size = 40
-    spacing = 10
-    cols_grid = 8
-    total_width = cols_grid * square_size + (cols_grid - 1) * spacing
-    start_x = (WIDTH - total_width) // 2
-    start_y = 100
-    option_rects = []
-
-    for i, (name, color_val) in enumerate(color_options):
-        col = i % cols_grid
-        row = i // cols_grid
-        x = start_x + col * (square_size + spacing)
-        y = start_y + row * (square_size + spacing)
-        rect = pygame.Rect(x, y, square_size, square_size)
-        pygame.draw.rect(screen, color_val, rect)
-        # Outline for the currently selected color
-        if color_val == snake_color:
-            pygame.draw.rect(screen, BLACK, rect, 3)
-        else:
-            pygame.draw.rect(screen, BLACK, rect, 1)
-        option_rects.append((rect, color_val))
-
-    # Back button
-    button_width, button_height = 140, 60
-    button_x = WIDTH // 2 - button_width // 2
-    button_y = HEIGHT - 100
-    back_button_rect = pygame.Rect(button_x, button_y, button_width, button_height)
-    pygame.draw.rect(screen, (200, 0, 0), back_button_rect, border_radius=10)
-    back_text = font.render("Back", True, (255, 255, 255))
-    back_text_rect = back_text.get_rect(center=back_button_rect.center)
-    screen.blit(back_text, back_text_rect)
-
-    pygame.display.flip()
-    return back_button_rect, option_rects
-
-def draw_game_over():
-    screen.fill((0, 0, 0))
-    game_over_text = big_font.render("Game Over!", True, RED)
-    score_text = font.render(f"Final Score: {score}", True, (255, 255, 255))
-    continue_text = font.render("Click to return to menu", True, (255, 255, 255))
-    go_rect = game_over_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))
-    score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-    cont_rect = continue_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
-    screen.blit(game_over_text, go_rect)
-    screen.blit(score_text, score_rect)
-    screen.blit(continue_text, cont_rect)
-    pygame.display.flip()
-    return (go_rect, score_rect, cont_rect)
-
-# ========== Main Loop & Game States ==========
-
-game_state = "menu"  # Possible states: "menu", "store", "playing", "game_over"
-running = True
-
-while running:
-    if game_state == "menu":
-        play_button_rect, store_icon_rect = draw_menu()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if play_button_rect.collidepoint(event.pos):
-                    reset_game()
-                    game_state = "playing"
-                elif store_icon_rect.collidepoint(event.pos):
-                    game_state = "store"
-
-    elif game_state == "store":
-        back_button_rect, option_rects = draw_store()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Check color selection
-                for rect, color_val in option_rects:
-                    if rect.collidepoint(event.pos):
-                        snake_color = color_val
-                # Check "Back" button
-                if back_button_rect.collidepoint(event.pos):
-                    game_state = "menu"
-        clock.tick(30)
-
-    elif game_state == "playing":
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = event.pos
-                head_x, head_y = snake.body[0]
-                grid_x = x // GRID_SIZE
-                grid_y = (y - 100) // GRID_SIZE
-                if grid_y >= 0:
-                    dx, dy = grid_x - head_x, grid_y - head_y
-                    if abs(dx) > abs(dy):
-                        new_dir = RIGHT if dx > 0 else LEFT
-                    else:
-                        new_dir = DOWN if dy > 0 else UP
-                    if new_dir != OPPOSITE[snake.direction]:
-                        snake.direction = new_dir
-
-        snake.move()
-
-        # Check self-collision
-        if snake.body[0] in snake.body[1:]:
-            game_state = "game_over"
-            continue
-
-        # Check obstacle collision
-        if snake.body[0] in obstacles:
-            # If snake has more than one segment, remove one segment
-            if len(snake.body) > 1:
-                snake.body.pop()
-            else:
-                game_state = "game_over"
-                continue
-
-        # Check food collision
-        if snake.body[0] == food.position:
-            snake.grow()
-            apple_count += 1
-
-            # Score logic
-            if bonus_active:
-                score += 30
-                bonus_active = False
-            else:
-                score += 10
-
-            # Add new obstacle if fewer than 10
-            add_obstacle()
-
-            # Respawn food
-            food.respawn()
-
-            # Check bonus
-            if apple_count == 3:
-                bonus_active = True
-                apple_count = 0
-
-            # Increase level every 50 points
-            if score % 50 == 0:
-                level += 1
-                speed += 2
-
-        # Draw the game
-        screen.fill(SCOREBOARD_BG, (0, 0, WIDTH, 100))
-        screen.blit(grass_bg, (0, 100))
-
-        # Draw snake
-        for seg in snake.body:
-            pygame.draw.rect(screen, snake_color, (seg[0] * GRID_SIZE, 100 + seg[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
-
-        # Draw food
-        if food.position:
-            pygame.draw.rect(screen, RED, (food.position[0] * GRID_SIZE, 100 + food.position[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE))
-
-        # Draw obstacles
-        for obs in obstacles:
-            x, y = obs
-            pygame.draw.rect(screen, GRAY, (x * GRID_SIZE, 100 + y * GRID_SIZE, GRID_SIZE, GRID_SIZE))
-
-        # Display score and level
-        score_text = font.render(f"Score: {score}  Level: {level}", True, BLACK)
-        screen.blit(score_text, (10, 10))
-
-        # Bonus message
-        if bonus_active:
-            bonus_text = font.render("🔥 3× BONUS ACTIVE! 🔥", True, GOLD)
-            screen.blit(bonus_text, (WIDTH // 2 - bonus_text.get_width() // 2, 10))
-
-        pygame.display.flip()
-        clock.tick(speed)
-
-    elif game_state == "game_over":
-        draw_game_over()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # Return to menu
-                game_state = "menu"
-
-pygame.quit()
-sys.exit()
-        
-    </script>
+    // Start by drawing the menu
+    draw();
+  </script>
 </body>
 </html>

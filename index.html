@@ -397,23 +397,22 @@
       let head = { ...snake.body[0] };
       head.x = (head.x + snake.direction.x + COLS) % COLS;
       head.y = (head.y + snake.direction.y + ROWS) % ROWS;
+      // Check self-collision (ignore head)
       if (snake.body.slice(1).some(seg => seg.x === head.x && seg.y === head.y)) {
         gameState = "game_over";
         return;
       }
       snake.body.unshift(head);
+      // Check collision with obstacles
       if (obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
         if (snake.body.length > 1) {
           snake.body.pop();
-          if (snake.body.length === 0) {
-            gameState = "game_over";
-            return;
-          }
         } else {
           gameState = "game_over";
           return;
         }
       }
+      // Check food collision
       if (food.position && head.x === food.position.x && head.y === food.position.y) {
         snake.grow();
         appleCount++;
@@ -436,7 +435,8 @@
       } else {
         snake.body.pop();
       }
-      if (snake.body.length === 0) { // Check for snake death if no segments remain
+      // Check for snake death if no segments remain
+      if (snake.body.length === 0) {
         gameState = "game_over";
         return;
       }
@@ -462,6 +462,7 @@
         } else {
           newDir = dy > 0 ? DOWN : UP;
         }
+        // Prevent reversing direction
         if (!(snake.direction.x + newDir.x === 0 && snake.direction.y + newDir.y === 0)) {
           snake.direction = newDir;
         }
@@ -487,6 +488,7 @@
           draw();
         }
       } else if (gameState === "game_over") {
+        // On game over, a click anywhere returns to menu
         gameState = "menu";
         draw();
       }

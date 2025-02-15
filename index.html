@@ -25,9 +25,9 @@
     // Basic Colors (as strings)
     const RED = "#ff0000";
     const BLACK = "#000000";
-    const GRAY = "#969696";  // (150,150,150)
-    const GOLD = "#ffd700";  // (255,215,0)
-    const SCOREBOARD_BG = "#e6e6e6";  // (230,230,230)
+    const GRAY = "#969696";  // equivalent to (150,150,150)
+    const GOLD = "#ffd700";  // equivalent to (255,215,0)
+    const SCOREBOARD_BG = "#e6e6e6";  // equivalent to (230,230,230)
 
     // Global Game State Variables
     let gameState = "menu";  // "menu", "store", "skins", "playing", "game_over"
@@ -45,7 +45,7 @@
     let food = null;
     let obstacles = [{ x: 10, y: 8 }, { x: 15, y: 12 }];
 
-    // Timing for playing state updates
+    // Timing
     let lastUpdateTime = 0;
 
     // --- Load Images ---
@@ -180,13 +180,13 @@
       }
     }
 
-    // Utility: check if point is in rectangle
+    // Utility: check if a point is inside a rectangle
     function pointInRect(point, rect) {
       return point.x >= rect.x && point.x <= rect.x + rect.width &&
              point.y >= rect.y && point.y <= rect.y + rect.height;
     }
 
-    // UI rectangles for click detection
+    // Global UI rectangles for click detection
     let uiRects = {};
 
     // --- Drawing Functions ---
@@ -241,6 +241,7 @@
       const coinText = String(coinCount);
       const coinTextWidth = ctx.measureText(coinText).width;
       ctx.fillText(coinText, coinX - coinTextWidth - 5, coinY + 30);
+      uiRects = Object.assign(uiRects); // ensure global uiRects updated
       return uiRects;
     }
 
@@ -252,7 +253,7 @@
       const storeTitle = "Store";
       const storeTitleWidth = ctx.measureText(storeTitle).width;
       ctx.fillText(storeTitle, (WIDTH - storeTitleWidth) / 2, 50);
-      // Color grid with 8 columns
+      // Draw color selection grid using 8 columns
       const squareSize = 30, spacing = 5, cols = 8;
       const totalWidth = cols * squareSize + (cols - 1) * spacing;
       const startX = (WIDTH - totalWidth) / 2;
@@ -270,7 +271,6 @@
         uiRects.colorOptions.push({ rect: { x, y, width: squareSize, height: squareSize },
                                       value: colorOptions[i].value });
       }
-      // Back button
       const buttonW = 140, buttonH = 60;
       const backX = (WIDTH - buttonW) / 2;
       const backY = HEIGHT - 120;
@@ -282,7 +282,7 @@
       const backTextWidth = ctx.measureText(backText).width;
       ctx.fillText(backText, backX + (buttonW - backTextWidth) / 2, backY + 40);
       uiRects.storeBack = { x: backX, y: backY, width: buttonW, height: buttonH };
-      // Skins button
+      // Skins button above back button
       const skinsY = backY - buttonH - 10;
       ctx.fillStyle = "rgb(0,100,200)";
       roundRect(ctx, backX, skinsY, buttonW, buttonH, 10, true, false);
@@ -317,6 +317,7 @@
         ctx.strokeStyle = BLACK;
         ctx.lineWidth = 2;
         ctx.strokeRect(x, y, previewSize, previewSize);
+        // Scale preview slightly smaller
         const scaledPreview = document.createElement("canvas");
         scaledPreview.width = previewSize - 10;
         scaledPreview.height = previewSize - 10;
@@ -325,7 +326,7 @@
         const previewX = x + (previewSize - scaledPreview.width) / 2;
         const previewY = y + (previewSize - scaledPreview.height) / 2;
         ctx.drawImage(scaledPreview, previewX, previewY);
-        // Overlay cost text
+        // Overlay cost text in bottom right
         ctx.fillStyle = GOLD;
         ctx.font = "14px sans-serif";
         const costText = "5000";
@@ -333,7 +334,6 @@
         ctx.fillText(costText, x + previewSize - costWidth - 2, y + previewSize - 2);
         uiRects.maskOptions.push({ rect, img: maskImages[i] });
       }
-      // Back button
       const buttonW = 140, buttonH = 60;
       const backX = (WIDTH - buttonW) / 2;
       const backY = HEIGHT - 120;
@@ -367,7 +367,6 @@
       ctx.fillText(contText, (WIDTH - contWidth) / 2, HEIGHT / 2 + 50);
     }
 
-    // --- Playing State Drawing ---
     function drawPlaying() {
       ctx.fillStyle = SCOREBOARD_BG;
       ctx.fillRect(0, 0, WIDTH, 100);
@@ -376,6 +375,7 @@
         const x = seg.x * GRID_SIZE;
         const y = 100 + seg.y * GRID_SIZE;
         if (snakeSkin) {
+          // Scale the skin to fit one grid square
           ctx.drawImage(snakeSkin, x, y, GRID_SIZE, GRID_SIZE);
         } else {
           ctx.fillStyle = snakeColor;
@@ -460,7 +460,6 @@
           } else {
             newDir = dy > 0 ? DOWN : UP;
           }
-          // Prevent reversing direction directly
           if (!(newDir.x === -snake.direction.x && newDir.y === -snake.direction.y)) {
             snake.direction = newDir;
           }
@@ -470,7 +469,6 @@
       }
     }
 
-    // --- Update Playing State ---
     function updateGameLogic() {
       if (gameState === "playing") {
         snake.move();
@@ -516,18 +514,17 @@
         }
         drawPlaying();
       } else if (gameState === "menu") {
-        drawMenu();
+        uiRects = drawMenu();
       } else if (gameState === "store") {
-        drawStore();
+        uiRects = drawStore();
       } else if (gameState === "skins") {
-        drawSkins();
+        uiRects = drawSkins();
       } else if (gameState === "game_over") {
         drawGameOver();
       }
       requestAnimationFrame(gameLoop);
     }
 
-    // Start the game loop
     requestAnimationFrame(gameLoop);
   </script>
 </body>
